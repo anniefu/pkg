@@ -16,6 +16,7 @@ limitations under the License.
 package metrics
 
 import (
+	"fmt"
 	"os"
 	"path"
 	"reflect"
@@ -45,7 +46,7 @@ var (
 		ops         ExporterOptions
 		expectedErr string
 	}{{
-		name: "empty config",
+		name: "emptyConfig",
 		ops: ExporterOptions{
 			Domain:    servingDomain,
 			Component: testComponent,
@@ -400,6 +401,29 @@ var (
 				prometheusPort:     9091,
 			},
 			expectedNewExporter: true,
+			// }, {
+			// 	name: "allStackdriverOptions",
+			// 	ops: ExporterOptions{
+			// 		StackdriverConfigMap: map[string]string{
+			// 			"project-id":      "project",
+			// 			"gcp-location":    "us-west1",
+			// 			"cluster-name":    "cluster",
+			// 			"gcp-secret-name": "secret",
+			// 		},
+			// 		Domain:    servingDomain,
+			// 		Component: testComponent,
+			// 	},
+			// 	expectedConfig: metricsConfig{
+			// 		domain:                            servingDomain,
+			// 		component:                         testComponent,
+			// 		backendDestination:                Stackdriver,
+			// 		stackdriverProjectID:              "test2",
+			// 		reportingPeriod:                   60 * time.Second,
+			// 		isStackdriverBackend:              true,
+			// 		stackdriverMetricTypePrefix:       path.Join(servingDomain, testComponent),
+			// 		stackdriverCustomMetricTypePrefix: path.Join(customMetricTypePrefix, customSubDomain, testComponent),
+			// 		stackdriverCustomMetricsSubDomain: customSubDomain,
+			// 	},
 		}}
 	envTests = []struct {
 		name           string
@@ -536,7 +560,10 @@ func TestUpdateExporter(t *testing.T) {
 	for _, test := range errorTests {
 		t.Run(test.name, func(t *testing.T) {
 			defer ClearAll()
-			UpdateExporter(test.ops, TestLogger(t))
+			err := UpdateExporter(test.ops, TestLogger(t))
+			if err != nil {
+				fmt.Println(err)
+			}
 			mConfig := getCurMetricsConfig()
 			if mConfig != oldConfig {
 				t.Error("mConfig should not change")
@@ -559,7 +586,7 @@ func TestUpdateExporter_doesNotCreateExporter(t *testing.T) {
 	}
 }
 
-func TestMetricsOptions(t *testing.T) {
+func TestMetricsOptionsToJson(t *testing.T) {
 	testCases := map[string]struct {
 		opts    *ExporterOptions
 		want    string
@@ -570,7 +597,7 @@ func TestMetricsOptions(t *testing.T) {
 			want:    "",
 			wantErr: "json options string is empty",
 		},
-		"happy": {
+		"standardConfig": {
 			opts: &ExporterOptions{
 				Domain:         "domain",
 				Component:      "component",
@@ -580,7 +607,35 @@ func TestMetricsOptions(t *testing.T) {
 					"boosh": "kakow",
 				},
 			},
-			want: `{"Domain":"domain","Component":"component","PrometheusPort":9090,"ConfigMap":{"boosh":"kakow","foo":"bar"}}`,
+			want: `{"Domain":"domain","Component":"component","PrometheusPort":9090,"ConfigMap":{"boosh":"kakow","foo":"bar"},"StackdriverConfigMap":null}`,
+		},
+		"stackdriverConfig": {
+			opts: &ExporterOptions{
+				Domain:         "domain",
+				Component:      "component",
+				PrometheusPort: 9090,
+				StackdriverConfigMap: map[string]string{
+					"foo":   "bar",
+					"boosh": "kakow",
+				},
+			},
+			want: `{"Domain":"domain","Component":"component","PrometheusPort":9090,"ConfigMap":null,"StackdriverConfigMap":{"boosh":"kakow","foo":"bar"}}`,
+		},
+		"allConfig": {
+			opts: &ExporterOptions{
+				Domain:         "domain",
+				Component:      "component",
+				PrometheusPort: 9090,
+				ConfigMap: map[string]string{
+					"apple":  "orange",
+					"banana": "pear",
+				},
+				StackdriverConfigMap: map[string]string{
+					"foo":   "bar",
+					"boosh": "kakow",
+				},
+			},
+			want: `{"Domain":"domain","Component":"component","PrometheusPort":9090,"ConfigMap":{"apple":"orange","banana":"pear"},"StackdriverConfigMap":{"boosh":"kakow","foo":"bar"}}`,
 		},
 	}
 	for n, tc := range testCases {
