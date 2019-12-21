@@ -20,6 +20,8 @@ import (
 	"go.opencensus.io/stats/view"
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
+
+	"contrib.go.opencensus.io/exporter/ocagent"
 )
 
 var (
@@ -98,7 +100,7 @@ func UpdateExporter(ops ExporterOptions, logger *zap.SugaredLogger) error {
 	if isNewExporterRequired(newConfig) {
 		logger.Info("Flushing the existing exporter before setting up the new exporter.")
 		FlushExporter()
-		e, err := newMetricsExporter(newConfig, logger)
+		e, err := newOpenCensusExporter(newConfig, logger)
 		if err != nil {
 			logger.Errorf("Failed to update a new metrics exporter based on metric config %v. error: %v", newConfig, err)
 			return err
@@ -110,6 +112,17 @@ func UpdateExporter(ops ExporterOptions, logger *zap.SugaredLogger) error {
 
 	setCurMetricsConfig(newConfig)
 	return nil
+}
+
+func newOpenCensusExporter(config *metricsConfig, logger *zap.SugaredLogger) (view.Exporter, error) {
+	logger.Info("Setting up OpenCensus")
+	oce, err := ocagent.NewExporter()
+	if err != nil {
+		return nil, err
+	}
+
+	view.RegisterExporter(oce)
+	return oce, nil
 }
 
 // isNewExporterRequired compares the non-nil newConfig against curMetricsConfig. When backend changes,
